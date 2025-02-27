@@ -142,10 +142,23 @@ func collectMetricsJob(secretKey string, oneuptimeUrl string, proxyUrl string) {
 		slog.Info("Using proxy to send request:" + proxyUrl)
 	}
 
-	resp, err := client.Post(oneuptimeUrl+"/server-monitor/response/ingest/"+secretKey, "application/json", bytes.NewBuffer(reqBody))
-	if err != nil {
-		slog.Error("Failed to create request: ", err)
-		return
+	var resp *http.Response
+	for i := 0; i < 3; i++ {
+		resp, err = client.Post(oneuptimeUrl+"/server-monitor/response/ingest/"+secretKey, "application/json", bytes.NewBuffer(reqBody))
+		if err != nil {
+			slog.Error("Failed to create request: ", err)
+			return
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 || resp.StatusCode >= 500 {
+			slog.Warn("Request failed with status code ", resp.StatusCode, ". Retrying...")
+			time.Sleep(1 * time.Second)
+			continue
+		}
 	}
 
 	defer resp.Body.Close()
